@@ -715,7 +715,7 @@ input::placeholder { color: var(--muted); font-weight: 400; }
         <thead>
           <tr>
             <th>Product</th>
-            <th>Tag Matched</th>
+            <th>Tags (matched highlighted)</th>
             <th>Fields Updated</th>
             <th>Status</th>
           </tr>
@@ -882,25 +882,22 @@ function setProgress(pct, text) {
   document.getElementById('progText').textContent = text;
 }
 
-/* ═══ MAIN SYNC ═══ */
-async function runSync() {
-  if (running) return;
+/* ═══ EXACT TAG MATCH HELPER ═══ */
+// Shopify's tag= query is a loose/partial match — it returns products that
+// contain the search string anywhere in their tags list.
+// This function enforces a strict exact match after fetching.
+function hasExactTag(product, tag) {
+  // product.tags is a comma-separated string e.g. "summer-sale, Instabar120K-AB, clearance"
+  const tagList = (product.tags || '')
+    .split(',')
+    .map(t => t.trim().toLowerCase());
+  return tagList.includes(tag.trim().toLowerCase());
+}
 
-  const tag      = document.getElementById('productTag').value.trim();
-  const store    = document.getElementById('storeUrl').value.trim();
-  const token    = document.getElementById('apiToken').value.trim();
-  const dryRun   = document.getElementById('dryRun').value === 'yes';
-  const rateMs   = parseInt(document.getElementById('rateLimit').value);
-  const stopOnErr= document.getElementById('onError').value === 'stop';
-
-  if (!tag)   { alert('Enter a product tag to search.'); return; }
-  if (!store) { alert('Enter your Shopify store URL.'); return; }
-  if (!token) { alert('Enter your Admin API token.'); return; }
-
-  // Collect values
+/* ═══ COLLECT FIELDS HELPER ═══ */
+function collectFields() {
   const newPrice = document.getElementById('newPrice').value;
   const newCost  = document.getElementById('newCost').value;
-
   const metaFields = [];
   if (fieldToggles.meta) {
     if (metaToggles.federal && document.getElementById('meta-federal-val').value !== '') {
@@ -919,7 +916,6 @@ async function runSync() {
         type: document.getElementById('meta-provincial-type').value
       });
     }
-    // Extra custom metas
     for (let i = 1; i <= extraMetaCount; i++) {
       const el = document.getElementById('extra-' + i);
       if (!el) continue;
@@ -930,46 +926,96 @@ async function runSync() {
       if (ns && key && val) metaFields.push({ namespace: ns, key, value: val, type: typ });
     }
   }
+  return { newPrice, newCost, metaFields };
+}
 
+/* ═══ PREVIEW BEFORE WRITE ═══ */
+async function runSync() {
+  if (running) return;
+
+  const tag      = document.getElementById('productTag').value.trim();
+  const store    = document.getElementById('storeUrl').value.trim();
+  const token    = document.getElementById('apiToken').value.trim();
+  const dryRun   = document.getElementById('dryRun').value === 'yes';
+  const rateMs   = parseInt(document.getElementById('rateLimit').value);
+  const stopOnErr= document.getElementById('onError').value === 'stop';
+
+  if (!tag)   { alert('Enter a product tag to search.'); return; }
+  if (!store) { alert('Enter your Shopify store URL.'); return; }
+  if (!token) { alert('Enter your Admin API token.'); return; }
+
+  const { newPrice, newCost, metaFields } = collectFields();
+
+  // ── STEP 1: Fetch & exact-match filter first, then confirm ──
   running = true;
   cancelFlag = false;
   resultRows = [];
   document.getElementById('runBtn').disabled = true;
-  document.getElementById('runLabel').textContent = 'Running…';
+  document.getElementById('runLabel').textContent = 'Fetching products…';
   document.getElementById('logArea').innerHTML = '';
   document.getElementById('progressCard').classList.add('visible');
   document.getElementById('resultsCard').classList.remove('visible');
-  setProgress(0, 'Fetching products…');
+  setProgress(5, 'Fetching products from Shopify…');
 
   let stats = { total: 0, ok: 0, skip: 0, err: 0 };
 
   try {
-    log(`Searching for products with tag "${tag}"…`, 'info');
+    log(`Fetching products with tag "${tag}" from Shopify…`, 'info');
 
-    // Paginate all products with this tag
-    let products = [];
+    // Fetch all pages
+    let allFetched = [];
     let pageInfo = null;
-    let page = 0;
     do {
-      page++;
       const params = pageInfo
         ? `limit=250&page_info=${pageInfo}`
         : `limit=250&tag=${encodeURIComponent(tag)}`;
       const data = await shopifyGet('products.json', params);
-      products = products.concat(data.products || []);
-      // Try to get next page link (simplified)
-      pageInfo = null; // full pagination requires Link header — simplified here
+      allFetched = allFetched.concat(data.products || []);
+      pageInfo = null;
       if ((data.products || []).length < 250) break;
     } while (pageInfo && !cancelFlag);
 
+    log(`Shopify returned ${allFetched.length} product(s) — applying exact tag filter…`, 'info');
+
+    // ── EXACT MATCH FILTER — the critical fix ──
+    const products = allFetched.filter(p => hasExactTag(p, tag));
+    const filtered = allFetched.length - products.length;
+
+    if (filtered > 0) {
+      log(`⚠ Removed ${filtered} product(s) that had a partial/different tag match — exact match only.`, 'warn');
+    }
+
     if (!products.length) {
-      log(`No products found with tag "${tag}"`, 'warn');
-      setProgress(100, 'No products found');
+      log(`No products found with exact tag "${tag}"`, 'warn');
+      setProgress(100, 'No exact matches found');
       done(stats);
       return;
     }
 
-    log(`Found ${products.length} product(s) with tag "${tag}"`, 'ok');
+    log(`✓ ${products.length} product(s) confirmed with exact tag "${tag}"`, 'ok');
+
+    // ── CONFIRM before writing (unless dry run) ──
+    if (!dryRun) {
+      const fields = [];
+      if (fieldToggles.price && newPrice !== '') fields.push(`Price → $${newPrice}`);
+      if (fieldToggles.cost  && newCost  !== '') fields.push(`Cost → $${newCost}`);
+      metaFields.forEach(m => fields.push(`${m.namespace}.${m.key} → ${m.value}`));
+
+      const confirmed = confirm(
+        `⚠ CONFIRM UPDATE\n\n` +
+        `Tag: "${tag}"\n` +
+        `Products to update: ${products.length}\n\n` +
+        `Changes:\n${fields.map(f => '  • ' + f).join('\n')}\n\n` +
+        `This will write to your live Shopify store. Continue?`
+      );
+      if (!confirmed) {
+        log('Update cancelled by user.', 'warn');
+        done(stats);
+        return;
+      }
+    }
+
+    setProgress(10, `Processing ${products.length} product(s)…`);
     stats.total = products.length;
 
     for (let i = 0; i < products.length; i++) {
@@ -1027,17 +1073,17 @@ async function runSync() {
 
         if (fieldsUpdated.length === 0) {
           stats.skip++;
-          resultRows.push({ title: product.title, id: product.id, tag, fields: [], status: 'skip', err: '' });
+          resultRows.push({ title: product.title, id: product.id, tag, allTags: product.tags, fields: [], status: 'skip', err: '' });
         } else {
           stats.ok++;
-          resultRows.push({ title: product.title, id: product.id, tag, fields: fieldsUpdated, status: 'ok', err: '' });
+          resultRows.push({ title: product.title, id: product.id, tag, allTags: product.tags, fields: fieldsUpdated, status: 'ok', err: '' });
         }
 
       } catch(e) {
         hasError = true;
         errMsg = e.message;
         stats.err++;
-        resultRows.push({ title: product.title, id: product.id, tag, fields: fieldsUpdated, status: 'err', err: errMsg });
+        resultRows.push({ title: product.title, id: product.id, tag, allTags: product.tags, fields: fieldsUpdated, status: 'err', err: errMsg });
         log(`  ✗ Error: ${errMsg}`, 'err');
         if (stopOnErr) { log('Stopping due to error (On Error = Stop)', 'warn'); break; }
       }
@@ -1091,9 +1137,15 @@ function renderResults() {
       ? '<span class="badge badge-err">Error</span>'
       : '<span class="badge badge-skip">Skipped</span>';
     const errLine = r.err ? `<div class="error-msg">${r.err.slice(0,100)}</div>` : '';
+    // Show all tags, highlight the matched one
+    const tagPills = (r.allTags || '').split(',').map(t => {
+      const trimmed = t.trim();
+      const isMatch = trimmed.toLowerCase() === r.tag.toLowerCase();
+      return `<span style="font-family:var(--mono);font-size:.65rem;padding:.1rem .35rem;border-radius:2px;margin:.1rem;display:inline-block;${isMatch ? 'background:rgba(26,107,200,.15);color:var(--accent2);font-weight:500;border:1px solid rgba(26,107,200,.3);' : 'color:var(--muted);'}">${trimmed}</span>`;
+    }).join('');
     return `<tr>
       <td><div class="prod-title">${r.title}</div><div class="prod-id">#${r.id}</div></td>
-      <td><span style="font-family:var(--mono);font-size:.72rem;">${r.tag}</span></td>
+      <td><div style="line-height:1.8">${tagPills}</div></td>
       <td>${pills || '<span style="color:var(--muted);font-size:.72rem;">—</span>'}</td>
       <td>${badge}${errLine}</td>
     </tr>`;

@@ -1,60 +1,67 @@
-// api/shopify.js — Vercel Serverless Proxy for Shopify Admin API
+// api/shopify.js — Vercel Serverless Proxy v3
 
 module.exports = async function handler(req, res) {
-  // CORS headers — must be first
+  // ── CORS — must handle OPTIONS preflight first ──
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-shopify-path, x-shopify-method');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type,x-shopify-path,x-shopify-method');
+  res.setHeader('Access-Control-Max-Age', '86400');
 
-  // Handle preflight
   if (req.method === 'OPTIONS') {
-    res.status(200).end();
+    res.status(204).end();
     return;
   }
 
-  const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
-  const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;
-  const API_VERSION   = process.env.SHOPIFY_API_VERSION || '2024-10';
+  // ── Env vars ──
+  const STORE   = process.env.SHOPIFY_STORE;
+  const TOKEN   = process.env.SHOPIFY_TOKEN;
+  const VERSION = process.env.SHOPIFY_API_VERSION || '2024-10';
 
-  if (!SHOPIFY_STORE || !SHOPIFY_TOKEN) {
+  if (!STORE || !TOKEN) {
     res.status(500).json({
-      error: 'Missing environment variables',
-      detail: `SHOPIFY_STORE=${SHOPIFY_STORE ? 'SET' : 'MISSING'}, SHOPIFY_TOKEN=${SHOPIFY_TOKEN ? 'SET' : 'MISSING'}`
+      error: 'Missing env vars',
+      SHOPIFY_STORE:  STORE  ? 'SET' : 'MISSING',
+      SHOPIFY_TOKEN:  TOKEN  ? 'SET' : 'MISSING',
     });
     return;
   }
 
+  // ── Read Shopify path + method from headers ──
   const shopifyPath   = req.headers['x-shopify-path'];
-  const shopifyMethod = req.headers['x-shopify-method'] || 'GET';
+  const shopifyMethod = (req.headers['x-shopify-method'] || 'GET').toUpperCase();
 
   if (!shopifyPath) {
     res.status(400).json({ error: 'Missing x-shopify-path header' });
     return;
   }
 
-  const shopifyUrl = `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/${shopifyPath}`;
+  const shopifyUrl = `https://${STORE}/admin/api/${VERSION}/${shopifyPath}`;
 
   try {
-    const fetchOptions = {
+    const options = {
       method: shopifyMethod,
       headers: {
-        'X-Shopify-Access-Token': SHOPIFY_TOKEN,
+        'X-Shopify-Access-Token': TOKEN,
         'Content-Type': 'application/json',
       },
     };
 
-    if (['POST', 'PUT', 'PATCH'].includes(shopifyMethod) && req.body) {
-      fetchOptions.body = typeof req.body === 'string'
-        ? req.body
-        : JSON.stringify(req.body);
+    // Attach body for write operations
+    if (['POST', 'PUT', 'PATCH'].includes(shopifyMethod)) {
+      // Vercel parses JSON body automatically — re-stringify it
+      if (req.body && Object.keys(req.body).length > 0) {
+        options.body = JSON.stringify(req.body);
+      }
     }
 
-    const shopifyRes = await fetch(shopifyUrl, fetchOptions);
-    const text = await shopifyRes.text();
-    res.setHeader('Content-Type', 'application/json');
-    res.status(shopifyRes.status).send(text);
+    const r = await fetch(shopifyUrl, options);
+    const text = await r.text();
+
+    res.status(r.status)
+       .setHeader('Content-Type', 'application/json')
+       .send(text);
 
   } catch (err) {
-    res.status(500).json({ error: 'Proxy fetch failed', detail: err.message });
+    res.status(500).json({ error: err.message });
   }
 };

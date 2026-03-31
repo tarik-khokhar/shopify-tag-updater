@@ -1,55 +1,60 @@
-// api/shopify.js — Vercel Serverless Proxy
-// Forwards requests to Shopify Admin API so the browser avoids CORS restrictions.
-// Credentials live here on the server — never exposed to the client.
+// api/shopify.js — Vercel Serverless Proxy for Shopify Admin API
 
-export default async function handler(req, res) {
-  // Allow requests from your own domain only
+module.exports = async function handler(req, res) {
+  // CORS headers — must be first
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-shopify-path, x-shopify-method');
 
+  // Handle preflight
   if (req.method === 'OPTIONS') {
     res.status(200).end();
     return;
   }
 
-  const { path, method } = req.query;
-
-  if (!path) {
-    res.status(400).json({ error: 'Missing ?path= query parameter' });
-    return;
-  }
-
-  const SHOPIFY_STORE = process.env.SHOPIFY_STORE;   // yourstore.myshopify.com
-  const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;   // shpat_xxxxxxxxxxxx
+  const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
+  const SHOPIFY_TOKEN = process.env.SHOPIFY_TOKEN;
   const API_VERSION   = process.env.SHOPIFY_API_VERSION || '2024-10';
 
   if (!SHOPIFY_STORE || !SHOPIFY_TOKEN) {
-    res.status(500).json({ error: 'SHOPIFY_STORE or SHOPIFY_TOKEN env vars not set' });
+    res.status(500).json({
+      error: 'Missing environment variables',
+      detail: `SHOPIFY_STORE=${SHOPIFY_STORE ? 'SET' : 'MISSING'}, SHOPIFY_TOKEN=${SHOPIFY_TOKEN ? 'SET' : 'MISSING'}`
+    });
     return;
   }
 
-  const shopifyUrl = `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/${path}`;
-  const httpMethod = method || req.method || 'GET';
+  const shopifyPath   = req.headers['x-shopify-path'];
+  const shopifyMethod = req.headers['x-shopify-method'] || 'GET';
+
+  if (!shopifyPath) {
+    res.status(400).json({ error: 'Missing x-shopify-path header' });
+    return;
+  }
+
+  const shopifyUrl = `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/${shopifyPath}`;
 
   try {
     const fetchOptions = {
-      method: httpMethod,
+      method: shopifyMethod,
       headers: {
         'X-Shopify-Access-Token': SHOPIFY_TOKEN,
         'Content-Type': 'application/json',
       },
     };
 
-    if (['POST', 'PUT', 'PATCH'].includes(httpMethod) && req.body) {
-      fetchOptions.body = JSON.stringify(req.body);
+    if (['POST', 'PUT', 'PATCH'].includes(shopifyMethod) && req.body) {
+      fetchOptions.body = typeof req.body === 'string'
+        ? req.body
+        : JSON.stringify(req.body);
     }
 
     const shopifyRes = await fetch(shopifyUrl, fetchOptions);
-    const data = await shopifyRes.json();
+    const text = await shopifyRes.text();
+    res.setHeader('Content-Type', 'application/json');
+    res.status(shopifyRes.status).send(text);
 
-    res.status(shopifyRes.status).json(data);
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Proxy fetch failed', detail: err.message });
   }
-}
+};

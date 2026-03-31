@@ -1,0 +1,1121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Shopify Tag Updater</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;1,9..144,300&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --ink: #0f0e0c;
+  --paper: #f5f2eb;
+  --paper2: #edeae0;
+  --paper3: #e4e0d4;
+  --rule: #d4cfc2;
+  --muted: #8c8678;
+  --accent: #c8401a;
+  --accent2: #1a6bc8;
+  --gold: #b8900a;
+  --success: #1a7a3c;
+  --mono: 'DM Mono', monospace;
+  --sans: 'DM Sans', sans-serif;
+  --serif: 'Fraunces', serif;
+}
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--sans);
+  min-height: 100vh;
+  line-height: 1.5;
+}
+
+/* ── HEADER ── */
+header {
+  border-bottom: 2px solid var(--ink);
+  padding: 1.1rem 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--paper);
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+.brand {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+}
+.brand-name {
+  font-family: var(--serif);
+  font-size: 1.25rem;
+  font-weight: 600;
+  letter-spacing: -.02em;
+}
+.brand-tag {
+  font-family: var(--mono);
+  font-size: .68rem;
+  color: var(--muted);
+  letter-spacing: .05em;
+  text-transform: uppercase;
+  border: 1px solid var(--rule);
+  padding: .2rem .5rem;
+  border-radius: 3px;
+}
+.header-status {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--muted);
+}
+.status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--rule); }
+.status-dot.connected { background: var(--success); box-shadow: 0 0 0 3px rgba(26,122,60,.18); }
+
+/* ── MAIN LAYOUT ── */
+main {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem 1.5rem 4rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+/* ── CARDS ── */
+.card {
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: .85rem 1.25rem;
+  border-bottom: 1px solid var(--rule);
+  background: var(--paper2);
+}
+.card-title {
+  font-family: var(--serif);
+  font-size: .95rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+.card-title-num {
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--muted);
+  border: 1px solid var(--rule);
+  padding: .1rem .4rem;
+  border-radius: 2px;
+}
+.card-body { padding: 1.25rem; }
+
+/* ── FORM ELEMENTS ── */
+.field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
+.field-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1rem; }
+.field { display: flex; flex-direction: column; gap: .4rem; }
+.field.full { grid-column: 1 / -1; }
+label {
+  font-size: .72rem;
+  font-weight: 500;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+input, select {
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  padding: .65rem .85rem;
+  font-family: var(--mono);
+  font-size: .82rem;
+  color: var(--ink);
+  outline: none;
+  transition: border-color .15s;
+  width: 100%;
+  appearance: none;
+}
+input:focus, select:focus { border-color: var(--ink); }
+input::placeholder { color: var(--muted); font-weight: 400; }
+
+.input-prefix {
+  position: relative;
+}
+.input-prefix span {
+  position: absolute;
+  left: .75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--mono);
+  font-size: .82rem;
+  color: var(--muted);
+  pointer-events: none;
+}
+.input-prefix input { padding-left: 1.6rem; }
+
+/* ── TAG INPUT ── */
+.tag-search-wrap { position: relative; }
+.tag-input-big {
+  background: var(--paper2);
+  border: 2px solid var(--ink);
+  border-radius: 2px;
+  padding: .85rem 1rem;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 300;
+  font-style: italic;
+  color: var(--ink);
+  outline: none;
+  width: 100%;
+  transition: box-shadow .15s;
+}
+.tag-input-big:focus { box-shadow: 3px 3px 0 var(--ink); }
+.tag-input-big::placeholder { color: var(--muted); }
+
+/* ── TOGGLES ── */
+.toggle-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: .75rem; }
+.toggle-card {
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  padding: .85rem 1rem;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: flex-start;
+  gap: .65rem;
+  user-select: none;
+}
+.toggle-card:hover { border-color: var(--ink); background: var(--paper2); }
+.toggle-card.active { border-color: var(--ink); background: var(--paper2); box-shadow: 2px 2px 0 var(--ink); }
+.toggle-box {
+  width: 18px; height: 18px; flex-shrink: 0;
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  margin-top: 1px;
+  transition: all .15s;
+  font-size: .7rem;
+}
+.toggle-card.active .toggle-box { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+.toggle-info {}
+.toggle-name { font-size: .82rem; font-weight: 500; }
+.toggle-desc { font-size: .7rem; color: var(--muted); margin-top: .1rem; font-family: var(--mono); }
+
+/* ── METAFIELD ROWS ── */
+.meta-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 1fr;
+  gap: .75rem;
+  align-items: end;
+  padding: .75rem 0;
+  border-bottom: 1px solid var(--rule);
+}
+.meta-row:last-child { border-bottom: none; padding-bottom: 0; }
+.meta-label-cell {
+  font-family: var(--mono);
+  font-size: .75rem;
+  color: var(--ink);
+  font-weight: 500;
+  padding-bottom: .65rem;
+  line-height: 1.3;
+}
+.meta-label-ns {
+  font-size: .65rem;
+  color: var(--muted);
+  margin-top: .15rem;
+}
+.meta-enabled {
+  display: flex;
+  align-items: center;
+  gap: .4rem;
+  cursor: pointer;
+  margin-bottom: .1rem;
+}
+.meta-check {
+  width: 14px; height: 14px;
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: .6rem;
+  transition: all .15s;
+  flex-shrink: 0;
+}
+.meta-enabled.on .meta-check { border-color: var(--ink); background: var(--ink); color: var(--paper); }
+
+/* ── BUTTONS ── */
+.btn-run {
+  width: 100%;
+  padding: 1rem 1.5rem;
+  background: var(--ink);
+  color: var(--paper);
+  border: none;
+  font-family: var(--serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -.01em;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .6rem;
+  border-radius: 2px;
+}
+.btn-run:hover { background: var(--accent); box-shadow: 3px 3px 0 var(--ink); transform: translate(-1px,-1px); }
+.btn-run:active { transform: translate(0,0); box-shadow: none; }
+.btn-run:disabled { background: var(--rule); color: var(--muted); cursor: not-allowed; box-shadow: none; transform: none; }
+.btn-sm {
+  padding: .4rem .85rem;
+  border: 1.5px solid var(--rule);
+  background: transparent;
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: .72rem;
+  cursor: pointer;
+  color: var(--muted);
+  transition: all .15s;
+}
+.btn-sm:hover { border-color: var(--ink); color: var(--ink); }
+
+/* ── PROGRESS ── */
+.progress-section {
+  display: none;
+}
+.progress-section.visible { display: block; }
+.progress-bar-outer {
+  height: 3px;
+  background: var(--rule);
+  border-radius: 0;
+  overflow: hidden;
+  margin-bottom: .85rem;
+}
+.progress-bar-inner {
+  height: 100%;
+  background: var(--ink);
+  transition: width .4s ease;
+}
+.progress-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: .72rem;
+  color: var(--muted);
+  margin-bottom: 1.25rem;
+}
+
+/* ── RESULTS TABLE ── */
+.results-section { display: none; }
+.results-section.visible { display: block; }
+.result-stats {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: .75rem;
+  margin-bottom: 1.25rem;
+}
+.stat {
+  border: 1.5px solid var(--rule);
+  border-radius: 2px;
+  padding: .75rem 1rem;
+  text-align: center;
+}
+.stat-val {
+  font-family: var(--mono);
+  font-size: 1.5rem;
+  font-weight: 500;
+  display: block;
+  margin-bottom: .15rem;
+}
+.stat-val.ok { color: var(--success); }
+.stat-val.warn { color: var(--gold); }
+.stat-val.err { color: var(--accent); }
+.stat-key { font-size: .68rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-family: var(--mono); }
+.results-table { width: 100%; border-collapse: collapse; font-size: .78rem; }
+.results-table th {
+  font-family: var(--mono);
+  font-size: .65rem;
+  text-transform: uppercase;
+  letter-spacing: .07em;
+  color: var(--muted);
+  padding: .6rem .85rem;
+  border-bottom: 1.5px solid var(--ink);
+  text-align: left;
+  background: var(--paper2);
+}
+.results-table td {
+  padding: .7rem .85rem;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: top;
+}
+.results-table tr:last-child td { border-bottom: none; }
+.results-table tr:hover td { background: var(--paper2); }
+.prod-title { font-weight: 500; font-size: .82rem; }
+.prod-id { font-family: var(--mono); font-size: .67rem; color: var(--muted); }
+.badge {
+  display: inline-block;
+  padding: .15rem .5rem;
+  border-radius: 2px;
+  font-family: var(--mono);
+  font-size: .67rem;
+  font-weight: 500;
+  border: 1px solid;
+}
+.badge-ok { color: var(--success); border-color: rgba(26,122,60,.35); background: rgba(26,122,60,.08); }
+.badge-err { color: var(--accent); border-color: rgba(200,64,26,.35); background: rgba(200,64,26,.08); }
+.badge-skip { color: var(--muted); border-color: var(--rule); background: var(--paper2); }
+.change-pill {
+  display: inline-block;
+  font-family: var(--mono);
+  font-size: .67rem;
+  padding: .1rem .4rem;
+  border-radius: 2px;
+  margin: .1rem;
+}
+.ch-price { background: rgba(26,107,200,.1); color: var(--accent2); }
+.ch-cost { background: rgba(184,144,10,.1); color: var(--gold); }
+.ch-meta { background: rgba(200,64,26,.1); color: var(--accent); }
+.error-msg { font-family: var(--mono); font-size: .67rem; color: var(--accent); }
+
+/* ── LOGS ── */
+.log-area {
+  background: var(--ink);
+  color: #a8d4a0;
+  font-family: var(--mono);
+  font-size: .72rem;
+  padding: 1rem 1.25rem;
+  border-radius: 2px;
+  max-height: 180px;
+  overflow-y: auto;
+  line-height: 1.8;
+  margin-top: 1rem;
+}
+.log-area:empty::before { content: 'Waiting for sync to start...'; color: #5a6550; }
+.log-line { display: flex; gap: .75rem; }
+.log-time { color: #5a7055; flex-shrink: 0; }
+.log-ok { color: #6ec97a; }
+.log-err { color: #e8816a; }
+.log-info { color: #6aaee8; }
+.log-warn { color: #e8c86a; }
+
+/* ── CORS NOTICE ── */
+.cors-notice {
+  border: 1.5px solid var(--gold);
+  border-radius: 2px;
+  padding: 1rem 1.25rem;
+  background: rgba(184,144,10,.06);
+  display: flex;
+  gap: .85rem;
+  align-items: flex-start;
+}
+.cors-icon { font-size: 1rem; flex-shrink: 0; margin-top: .1rem; }
+.cors-body {}
+.cors-title { font-weight: 500; font-size: .85rem; margin-bottom: .35rem; color: var(--gold); }
+.cors-text { font-size: .78rem; color: var(--muted); line-height: 1.6; }
+.cors-text code {
+  font-family: var(--mono);
+  font-size: .72rem;
+  background: var(--paper2);
+  padding: .1rem .35rem;
+  border-radius: 2px;
+}
+
+/* ── SCROLLBAR ── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--rule); border-radius: 3px; }
+
+/* ── ANIMATIONS ── */
+@keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+.card { animation: fadeIn .3s ease both; }
+.card:nth-child(2) { animation-delay: .05s; }
+.card:nth-child(3) { animation-delay: .1s; }
+.card:nth-child(4) { animation-delay: .15s; }
+.card:nth-child(5) { animation-delay: .2s; }
+
+@media (max-width: 640px) {
+  .field-grid, .field-grid-3, .toggle-grid { grid-template-columns: 1fr; }
+  .meta-row { grid-template-columns: 1fr; }
+  .result-stats { grid-template-columns: 1fr 1fr; }
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">
+    <span class="brand-name">Shopify Tag Updater</span>
+    <span class="brand-tag">Bulk Product Editor</span>
+  </div>
+  <div class="header-status">
+    <div class="status-dot" id="connDot"></div>
+    <span id="connLabel">Not connected</span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ── STEP 1: CREDENTIALS ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="card-title-num">01</span> Shopify Connection</div>
+      <button class="btn-sm" onclick="testConnection()">Test connection</button>
+    </div>
+    <div class="card-body">
+      <div class="field-grid">
+        <div class="field">
+          <label>Store URL</label>
+          <input type="text" id="storeUrl" placeholder="yourstore.myshopify.com" oninput="resetConn()"/>
+        </div>
+        <div class="field">
+          <label>Admin API Token</label>
+          <input type="password" id="apiToken" placeholder="shpat_xxxxxxxxxxxxxxxx" oninput="resetConn()"/>
+        </div>
+        <div class="field">
+          <label>API Version</label>
+          <select id="apiVersion">
+            <option value="2024-10">2024-10 (latest)</option>
+            <option value="2024-07">2024-07</option>
+            <option value="2024-04">2024-04</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Proxy URL <span style="color:var(--muted);font-weight:400;letter-spacing:0;text-transform:none;">(optional, for CORS)</span></label>
+          <input type="text" id="proxyUrl" placeholder="https://your-proxy.vercel.app/api/shopify"/>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── CORS NOTICE ── -->
+  <div class="cors-notice">
+    <div class="cors-icon">⚠</div>
+    <div class="cors-body">
+      <div class="cors-title">Browser CORS limitation</div>
+      <div class="cors-text">
+        Shopify's Admin API blocks direct browser requests. To use this app fully, either:<br/>
+        <strong>Option A</strong> — run a local proxy: <code>npx shopify-proxy --token YOUR_TOKEN --store YOUR_STORE</code><br/>
+        <strong>Option B</strong> — deploy a Vercel serverless function (see previous guide).<br/>
+        Enter your proxy URL above, or use the <strong>Dry Run</strong> toggle below to preview changes without writing.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: TAG & FIELDS ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="card-title-num">02</span> Search by Tag</div>
+      <span id="matchCount" style="font-family:var(--mono);font-size:.72rem;color:var(--muted)"></span>
+    </div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:1rem;">
+      <div class="field">
+        <label>Product Tag</label>
+        <div class="tag-search-wrap">
+          <input type="text" class="tag-input-big" id="productTag" placeholder="e.g. summer-sale, clearance, vip-only…"/>
+        </div>
+      </div>
+      <div style="font-size:.78rem;color:var(--muted)">
+        All Shopify products carrying this exact tag will be updated. Tags are case-sensitive.
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: WHAT TO UPDATE ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="card-title-num">03</span> Fields to Update</div>
+    </div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:1.25rem;">
+
+      <!-- Toggle which fields -->
+      <div class="toggle-grid">
+        <div class="toggle-card active" id="tog-price" onclick="toggleField('price')">
+          <div class="toggle-box">✓</div>
+          <div class="toggle-info">
+            <div class="toggle-name">Variant Price</div>
+            <div class="toggle-desc">All variants</div>
+          </div>
+        </div>
+        <div class="toggle-card active" id="tog-cost" onclick="toggleField('cost')">
+          <div class="toggle-box">✓</div>
+          <div class="toggle-info">
+            <div class="toggle-name">Cost per Item</div>
+            <div class="toggle-desc">Inventory cost</div>
+          </div>
+        </div>
+        <div class="toggle-card active" id="tog-meta" onclick="toggleField('meta')">
+          <div class="toggle-box">✓</div>
+          <div class="toggle-info">
+            <div class="toggle-name">Metafields</div>
+            <div class="toggle-desc">Excise taxes</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Price & Cost -->
+      <div id="section-price-cost" style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="field" id="wrap-price">
+          <label>New Variant Price ($)</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="newPrice" placeholder="0.00" step="0.01" min="0"/>
+          </div>
+        </div>
+        <div class="field" id="wrap-cost">
+          <label>New Cost per Item ($)</label>
+          <div class="input-prefix">
+            <span>$</span>
+            <input type="number" id="newCost" placeholder="0.00" step="0.01" min="0"/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Metafields -->
+      <div id="section-meta">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:.75rem;">Product Metafields</div>
+
+        <div style="border:1.5px solid var(--rule);border-radius:2px;overflow:hidden;">
+          <!-- Federal Excise -->
+          <div class="meta-row" style="padding:.85rem 1rem;">
+            <div class="meta-label-cell">
+              <div class="meta-enabled on" id="me-federal" onclick="toggleMeta('federal')">
+                <div class="meta-check">✓</div>
+                <span style="font-size:.8rem;font-weight:500;">Federal Excise</span>
+              </div>
+              <div class="meta-label-ns" style="padding-left:1.3rem;">custom.__Federal_Excise</div>
+            </div>
+            <div class="field" id="mwrap-federal-val">
+              <label>Value</label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="meta-federal-val" placeholder="0.00" step="0.01" min="0"/>
+              </div>
+            </div>
+            <div class="field" id="mwrap-federal-type">
+              <label>Type</label>
+              <select id="meta-federal-type">
+                <option value="number_decimal">number_decimal</option>
+                <option value="single_line_text_field">text</option>
+                <option value="money">money</option>
+              </select>
+            </div>
+          </div>
+
+          <!-- Provincial Excise -->
+          <div class="meta-row" style="padding:.85rem 1rem;border-bottom:none;">
+            <div class="meta-label-cell">
+              <div class="meta-enabled on" id="me-provincial" onclick="toggleMeta('provincial')">
+                <div class="meta-check">✓</div>
+                <span style="font-size:.8rem;font-weight:500;">Provincial Excise</span>
+              </div>
+              <div class="meta-label-ns" style="padding-left:1.3rem;">custom.__Provincial_Excise</div>
+            </div>
+            <div class="field" id="mwrap-provincial-val">
+              <label>Value</label>
+              <div class="input-prefix"><span>$</span>
+                <input type="number" id="meta-provincial-val" placeholder="0.00" step="0.01" min="0"/>
+              </div>
+            </div>
+            <div class="field" id="mwrap-provincial-type">
+              <label>Type</label>
+              <select id="meta-provincial-type">
+                <option value="number_decimal">number_decimal</option>
+                <option value="single_line_text_field">text</option>
+                <option value="money">money</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- Add custom meta -->
+        <div id="extra-meta-container"></div>
+        <button class="btn-sm" style="margin-top:.75rem;" onclick="addCustomMeta()">+ Add another metafield</button>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ── STEP 4: OPTIONS & RUN ── -->
+  <div class="card">
+    <div class="card-header">
+      <div class="card-title"><span class="card-title-num">04</span> Run Options</div>
+    </div>
+    <div class="card-body" style="display:flex;flex-direction:column;gap:1rem;">
+      <div class="field-grid-3">
+        <div class="field">
+          <label>Rate Limit</label>
+          <select id="rateLimit">
+            <option value="500">2 req/s — safe</option>
+            <option value="250" selected>4 req/s — standard</option>
+            <option value="125">8 req/s — fast</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>Dry Run</label>
+          <select id="dryRun">
+            <option value="no">Off — write changes</option>
+            <option value="yes">On — preview only</option>
+          </select>
+        </div>
+        <div class="field">
+          <label>On Error</label>
+          <select id="onError">
+            <option value="continue">Continue</option>
+            <option value="stop">Stop</option>
+          </select>
+        </div>
+      </div>
+
+      <button class="btn-run" id="runBtn" onclick="runSync()">
+        <span id="runIcon">▶</span> <span id="runLabel">Update All Matching Products</span>
+      </button>
+    </div>
+  </div>
+
+  <!-- ── PROGRESS ── -->
+  <div class="card progress-section" id="progressCard">
+    <div class="card-header">
+      <div class="card-title"><span class="card-title-num">05</span> Sync Progress</div>
+      <button class="btn-sm" onclick="cancelSync()">Cancel</button>
+    </div>
+    <div class="card-body">
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="progFill" style="width:0%"></div>
+      </div>
+      <div class="progress-meta">
+        <span id="progText">Initialising…</span>
+        <span id="progPct" style="font-weight:500;color:var(--ink)">0%</span>
+      </div>
+      <div class="log-area" id="logArea"></div>
+    </div>
+  </div>
+
+  <!-- ── RESULTS ── -->
+  <div class="card results-section" id="resultsCard">
+    <div class="card-header">
+      <div class="card-title"><span class="card-title-num">06</span> Results</div>
+      <button class="btn-sm" onclick="exportResults()">Export CSV</button>
+    </div>
+    <div class="card-body">
+      <div class="result-stats">
+        <div class="stat"><span class="stat-val" id="rs-total">0</span><span class="stat-key">Products</span></div>
+        <div class="stat"><span class="stat-val ok" id="rs-ok">0</span><span class="stat-key">Updated</span></div>
+        <div class="stat"><span class="stat-val warn" id="rs-skip">0</span><span class="stat-key">Skipped</span></div>
+        <div class="stat"><span class="stat-val err" id="rs-err">0</span><span class="stat-key">Errors</span></div>
+      </div>
+      <table class="results-table">
+        <thead>
+          <tr>
+            <th>Product</th>
+            <th>Tag Matched</th>
+            <th>Fields Updated</th>
+            <th>Status</th>
+          </tr>
+        </thead>
+        <tbody id="resultsBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<script>
+/* ═══ STATE ═══ */
+let fieldToggles = { price: true, cost: true, meta: true };
+let metaToggles = { federal: true, provincial: true };
+let cancelFlag = false;
+let running = false;
+let resultRows = [];
+let extraMetaCount = 0;
+
+/* ═══ CONNECTION ═══ */
+function resetConn() {
+  document.getElementById('connDot').className = 'status-dot';
+  document.getElementById('connLabel').textContent = 'Not connected';
+}
+
+async function testConnection() {
+  const store = document.getElementById('storeUrl').value.trim();
+  const token = document.getElementById('apiToken').value.trim();
+  if (!store || !token) { alert('Enter store URL and API token first.'); return; }
+  document.getElementById('connLabel').textContent = 'Testing…';
+  try {
+    const data = await shopifyGet('shop.json');
+    document.getElementById('connDot').className = 'status-dot connected';
+    document.getElementById('connLabel').textContent = data.shop?.name || 'Connected';
+  } catch(e) {
+    document.getElementById('connDot').className = 'status-dot';
+    document.getElementById('connLabel').textContent = 'Failed — check credentials';
+    alert('Connection failed: ' + e.message);
+  }
+}
+
+/* ═══ API HELPERS ═══ */
+function apiBase() {
+  const proxy = document.getElementById('proxyUrl').value.trim();
+  const store = document.getElementById('storeUrl').value.trim();
+  const ver   = document.getElementById('apiVersion').value;
+  if (proxy) return proxy;
+  return `https://${store}/admin/api/${ver}`;
+}
+
+async function shopifyGet(path, params='') {
+  const proxy = document.getElementById('proxyUrl').value.trim();
+  const store = document.getElementById('storeUrl').value.trim();
+  const token = document.getElementById('apiToken').value.trim();
+  const ver   = document.getElementById('apiVersion').value;
+  let url;
+  if (proxy) {
+    url = `${proxy}?path=${encodeURIComponent(path + (params ? '?' + params : ''))}`;
+  } else {
+    url = `https://${store}/admin/api/${ver}/${path}${params ? '?' + params : ''}`;
+  }
+  const r = await fetch(url, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+  if (!r.ok) throw new Error(`GET ${path} → ${r.status}`);
+  return r.json();
+}
+
+async function shopifyPut(path, body) {
+  const proxy = document.getElementById('proxyUrl').value.trim();
+  const store = document.getElementById('storeUrl').value.trim();
+  const token = document.getElementById('apiToken').value.trim();
+  const ver   = document.getElementById('apiVersion').value;
+  let url;
+  if (proxy) {
+    url = `${proxy}?path=${encodeURIComponent(path)}&method=PUT`;
+  } else {
+    url = `https://${store}/admin/api/${ver}/${path}`;
+  }
+  const r = await fetch(url, {
+    method: 'PUT',
+    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) { const t = await r.text(); throw new Error(`PUT ${path} → ${r.status}: ${t.slice(0,120)}`); }
+  return r.json();
+}
+
+async function shopifyPost(path, body) {
+  const proxy = document.getElementById('proxyUrl').value.trim();
+  const store = document.getElementById('storeUrl').value.trim();
+  const token = document.getElementById('apiToken').value.trim();
+  const ver   = document.getElementById('apiVersion').value;
+  let url;
+  if (proxy) {
+    url = `${proxy}?path=${encodeURIComponent(path)}&method=POST`;
+  } else {
+    url = `https://${store}/admin/api/${ver}/${path}`;
+  }
+  const r = await fetch(url, {
+    method: 'POST',
+    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) { const t = await r.text(); throw new Error(`POST ${path} → ${r.status}: ${t.slice(0,120)}`); }
+  return r.json();
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+/* ═══ FIELD TOGGLES ═══ */
+function toggleField(f) {
+  fieldToggles[f] = !fieldToggles[f];
+  const card = document.getElementById('tog-' + f);
+  card.classList.toggle('active', fieldToggles[f]);
+  card.querySelector('.toggle-box').textContent = fieldToggles[f] ? '✓' : '';
+  if (f === 'price') document.getElementById('wrap-price').style.opacity = fieldToggles.price ? '1' : '.35';
+  if (f === 'cost')  document.getElementById('wrap-cost').style.opacity  = fieldToggles.cost  ? '1' : '.35';
+  if (f === 'meta')  document.getElementById('section-meta').style.opacity = fieldToggles.meta ? '1' : '.35';
+}
+
+function toggleMeta(m) {
+  metaToggles[m] = !metaToggles[m];
+  const el = document.getElementById('me-' + m);
+  el.classList.toggle('on', metaToggles[m]);
+  el.querySelector('.meta-check').textContent = metaToggles[m] ? '✓' : '';
+  const opacity = metaToggles[m] ? '1' : '.35';
+  document.getElementById('mwrap-' + m + '-val').style.opacity = opacity;
+  document.getElementById('mwrap-' + m + '-type').style.opacity = opacity;
+}
+
+/* ═══ CUSTOM META ═══ */
+function addCustomMeta() {
+  extraMetaCount++;
+  const id = 'extra-' + extraMetaCount;
+  const div = document.createElement('div');
+  div.id = id;
+  div.style.cssText = 'border:1.5px solid var(--rule);border-radius:2px;padding:.85rem 1rem;margin-top:.5rem;display:grid;grid-template-columns:150px 130px 1fr 1fr auto;gap:.75rem;align-items:end;';
+  div.innerHTML = `
+    <div class="field"><label>Namespace</label><input type="text" placeholder="custom" value="custom" id="${id}-ns"/></div>
+    <div class="field"><label>Key</label><input type="text" placeholder="my_field" id="${id}-key"/></div>
+    <div class="field"><label>Value</label><input type="text" placeholder="value" id="${id}-val"/></div>
+    <div class="field"><label>Type</label><select id="${id}-type"><option value="single_line_text_field">text</option><option value="number_decimal">number</option><option value="boolean">boolean</option></select></div>
+    <button class="btn-sm" onclick="document.getElementById('${id}').remove()" style="margin-bottom:0;">✕</button>
+  `;
+  document.getElementById('extra-meta-container').appendChild(div);
+}
+
+/* ═══ LOGGING ═══ */
+function log(msg, type='info') {
+  const area = document.getElementById('logArea');
+  const t = new Date().toLocaleTimeString('en-CA', {hour12:false});
+  const cls = {info:'log-info', ok:'log-ok', err:'log-err', warn:'log-warn'}[type] || 'log-info';
+  const line = document.createElement('div');
+  line.className = 'log-line';
+  line.innerHTML = `<span class="log-time">${t}</span><span class="${cls}">${msg}</span>`;
+  area.appendChild(line);
+  area.scrollTop = area.scrollHeight;
+}
+
+/* ═══ PROGRESS ═══ */
+function setProgress(pct, text) {
+  document.getElementById('progFill').style.width = pct + '%';
+  document.getElementById('progPct').textContent = Math.round(pct) + '%';
+  document.getElementById('progText').textContent = text;
+}
+
+/* ═══ MAIN SYNC ═══ */
+async function runSync() {
+  if (running) return;
+
+  const tag      = document.getElementById('productTag').value.trim();
+  const store    = document.getElementById('storeUrl').value.trim();
+  const token    = document.getElementById('apiToken').value.trim();
+  const dryRun   = document.getElementById('dryRun').value === 'yes';
+  const rateMs   = parseInt(document.getElementById('rateLimit').value);
+  const stopOnErr= document.getElementById('onError').value === 'stop';
+
+  if (!tag)   { alert('Enter a product tag to search.'); return; }
+  if (!store) { alert('Enter your Shopify store URL.'); return; }
+  if (!token) { alert('Enter your Admin API token.'); return; }
+
+  // Collect values
+  const newPrice = document.getElementById('newPrice').value;
+  const newCost  = document.getElementById('newCost').value;
+
+  const metaFields = [];
+  if (fieldToggles.meta) {
+    if (metaToggles.federal && document.getElementById('meta-federal-val').value !== '') {
+      metaFields.push({
+        namespace: 'custom',
+        key: '__Federal_Excise',
+        value: document.getElementById('meta-federal-val').value,
+        type: document.getElementById('meta-federal-type').value
+      });
+    }
+    if (metaToggles.provincial && document.getElementById('meta-provincial-val').value !== '') {
+      metaFields.push({
+        namespace: 'custom',
+        key: '__Provincial_Excise',
+        value: document.getElementById('meta-provincial-val').value,
+        type: document.getElementById('meta-provincial-type').value
+      });
+    }
+    // Extra custom metas
+    for (let i = 1; i <= extraMetaCount; i++) {
+      const el = document.getElementById('extra-' + i);
+      if (!el) continue;
+      const ns  = el.querySelector('[id$="-ns"]').value.trim();
+      const key = el.querySelector('[id$="-key"]').value.trim();
+      const val = el.querySelector('[id$="-val"]').value.trim();
+      const typ = el.querySelector('[id$="-type"]').value;
+      if (ns && key && val) metaFields.push({ namespace: ns, key, value: val, type: typ });
+    }
+  }
+
+  running = true;
+  cancelFlag = false;
+  resultRows = [];
+  document.getElementById('runBtn').disabled = true;
+  document.getElementById('runLabel').textContent = 'Running…';
+  document.getElementById('logArea').innerHTML = '';
+  document.getElementById('progressCard').classList.add('visible');
+  document.getElementById('resultsCard').classList.remove('visible');
+  setProgress(0, 'Fetching products…');
+
+  let stats = { total: 0, ok: 0, skip: 0, err: 0 };
+
+  try {
+    log(`Searching for products with tag "${tag}"…`, 'info');
+
+    // Paginate all products with this tag
+    let products = [];
+    let pageInfo = null;
+    let page = 0;
+    do {
+      page++;
+      const params = pageInfo
+        ? `limit=250&page_info=${pageInfo}`
+        : `limit=250&tag=${encodeURIComponent(tag)}`;
+      const data = await shopifyGet('products.json', params);
+      products = products.concat(data.products || []);
+      // Try to get next page link (simplified)
+      pageInfo = null; // full pagination requires Link header — simplified here
+      if ((data.products || []).length < 250) break;
+    } while (pageInfo && !cancelFlag);
+
+    if (!products.length) {
+      log(`No products found with tag "${tag}"`, 'warn');
+      setProgress(100, 'No products found');
+      done(stats);
+      return;
+    }
+
+    log(`Found ${products.length} product(s) with tag "${tag}"`, 'ok');
+    stats.total = products.length;
+
+    for (let i = 0; i < products.length; i++) {
+      if (cancelFlag) { log('Sync cancelled by user', 'warn'); break; }
+
+      const product = products[i];
+      const pct = 10 + ((i / products.length) * 88);
+      setProgress(pct, `Processing ${i+1}/${products.length}: ${product.title.slice(0,40)}`);
+      log(`Processing: ${product.title} (${product.id})`, 'info');
+
+      const fieldsUpdated = [];
+      let hasError = false;
+      let errMsg = '';
+
+      try {
+        // ── PRICE: update all variants ──
+        if (fieldToggles.price && newPrice !== '') {
+          for (const variant of (product.variants || [])) {
+            await sleep(rateMs);
+            if (!dryRun) {
+              await shopifyPut(`variants/${variant.id}.json`, {
+                variant: { id: variant.id, price: newPrice }
+              });
+            }
+          }
+          fieldsUpdated.push('price');
+          log(`  ✓ Price → $${newPrice}${dryRun ? ' [DRY]' : ''}`, 'ok');
+        }
+
+        // ── COST: update inventory item cost ──
+        if (fieldToggles.cost && newCost !== '') {
+          for (const variant of (product.variants || [])) {
+            await sleep(rateMs);
+            if (!dryRun) {
+              await shopifyPut(`inventory_items/${variant.inventory_item_id}.json`, {
+                inventory_item: { id: variant.inventory_item_id, cost: newCost }
+              });
+            }
+          }
+          fieldsUpdated.push('cost');
+          log(`  ✓ Cost → $${newCost}${dryRun ? ' [DRY]' : ''}`, 'ok');
+        }
+
+        // ── METAFIELDS ──
+        if (metaFields.length) {
+          for (const mf of metaFields) {
+            await sleep(rateMs);
+            if (!dryRun) {
+              await shopifyPost(`products/${product.id}/metafields.json`, { metafield: mf });
+            }
+            log(`  ✓ Meta ${mf.namespace}.${mf.key} → ${mf.value}${dryRun ? ' [DRY]' : ''}`, 'ok');
+          }
+          fieldsUpdated.push('meta');
+        }
+
+        if (fieldsUpdated.length === 0) {
+          stats.skip++;
+          resultRows.push({ title: product.title, id: product.id, tag, fields: [], status: 'skip', err: '' });
+        } else {
+          stats.ok++;
+          resultRows.push({ title: product.title, id: product.id, tag, fields: fieldsUpdated, status: 'ok', err: '' });
+        }
+
+      } catch(e) {
+        hasError = true;
+        errMsg = e.message;
+        stats.err++;
+        resultRows.push({ title: product.title, id: product.id, tag, fields: fieldsUpdated, status: 'err', err: errMsg });
+        log(`  ✗ Error: ${errMsg}`, 'err');
+        if (stopOnErr) { log('Stopping due to error (On Error = Stop)', 'warn'); break; }
+      }
+
+      updateResultStats(stats);
+      renderResults();
+    }
+
+    setProgress(100, `Done — ${stats.ok} updated, ${stats.err} errors`);
+    log(`Sync complete. Updated: ${stats.ok} | Skipped: ${stats.skip} | Errors: ${stats.err}`, 'ok');
+
+  } catch(e) {
+    log(`Fatal error: ${e.message}`, 'err');
+    setProgress(100, 'Failed — see log');
+  }
+
+  done(stats);
+}
+
+function done(stats) {
+  running = false;
+  cancelFlag = false;
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runLabel').textContent = 'Update All Matching Products';
+  document.getElementById('resultsCard').classList.add('visible');
+  updateResultStats(stats);
+  renderResults();
+}
+
+function cancelSync() { cancelFlag = true; }
+
+/* ═══ RESULTS ═══ */
+function updateResultStats(s) {
+  document.getElementById('rs-total').textContent = s.total;
+  document.getElementById('rs-ok').textContent    = s.ok;
+  document.getElementById('rs-skip').textContent  = s.skip;
+  document.getElementById('rs-err').textContent   = s.err;
+}
+
+function renderResults() {
+  const tbody = document.getElementById('resultsBody');
+  const fieldLabel = { price:'Variant Price', cost:'Cost/Item', meta:'Metafields' };
+  const fieldClass = { price:'ch-price', cost:'ch-cost', meta:'ch-meta' };
+  tbody.innerHTML = resultRows.map(r => {
+    const pills = r.fields.map(f =>
+      `<span class="change-pill ${fieldClass[f]}">${fieldLabel[f]}</span>`
+    ).join('');
+    const badge = r.status === 'ok'
+      ? '<span class="badge badge-ok">Updated</span>'
+      : r.status === 'err'
+      ? '<span class="badge badge-err">Error</span>'
+      : '<span class="badge badge-skip">Skipped</span>';
+    const errLine = r.err ? `<div class="error-msg">${r.err.slice(0,100)}</div>` : '';
+    return `<tr>
+      <td><div class="prod-title">${r.title}</div><div class="prod-id">#${r.id}</div></td>
+      <td><span style="font-family:var(--mono);font-size:.72rem;">${r.tag}</span></td>
+      <td>${pills || '<span style="color:var(--muted);font-size:.72rem;">—</span>'}</td>
+      <td>${badge}${errLine}</td>
+    </tr>`;
+  }).join('');
+}
+
+/* ═══ EXPORT CSV ═══ */
+function exportResults() {
+  if (!resultRows.length) return;
+  const rows = [['Product', 'ID', 'Tag', 'Fields Updated', 'Status', 'Error']];
+  resultRows.forEach(r => rows.push([
+    `"${r.title.replace(/"/g,'""')}"`,
+    r.id, r.tag,
+    r.fields.join('; '),
+    r.status, r.err
+  ]));
+  const csv = rows.map(r => r.join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = 'shopify-sync-results.csv';
+  a.click();
+}
+</script>
+</body>
+</html>

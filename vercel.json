@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/shopify", "destination": "/api/shopify" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}

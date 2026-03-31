@@ -700,343 +700,275 @@ input::placeholder { color: var(--muted); font-weight: 400; }
 </main>
 
 <script>
-/* ═══ STATE ═══ */
-let fieldToggles = { price: true, cost: true, meta: true };
-let metaToggles  = { federal: true, provincial: true };
-let cancelFlag   = false;
-let running      = false;
-let resultRows   = [];
-let extraMetaCount = 0;
+var fieldToggles = { price: true, cost: true, meta: true };
+var metaToggles  = { federal: true, provincial: true };
+var cancelFlag   = false;
+var running      = false;
+var resultRows   = [];
+var extraMetaCount = 0;
 
-/* ═══ HELPERS ═══ */
-const sleep = ms => new Promise(r => setTimeout(r, ms));
-
-function proxyUrl() { return (document.getElementById('proxyUrl').value || '').trim(); }
+function sleep(ms) { return new Promise(function(r){ setTimeout(r, ms); }); }
+function getProxyUrl() { return (document.getElementById('proxyUrl').value || '').trim(); }
 
 function diag(msg, color) {
-  const box = document.getElementById('diagBox');
+  var box = document.getElementById('diagBox');
   box.style.display = 'block';
-  const line = document.createElement('div');
+  var line = document.createElement('div');
   line.style.color = color || '#a8d4a0';
   line.textContent = msg;
   box.appendChild(line);
   box.scrollTop = box.scrollHeight;
 }
 function clearDiag() {
-  const box = document.getElementById('diagBox');
+  var box = document.getElementById('diagBox');
   box.style.display = 'none';
   box.innerHTML = '';
 }
 
-/* ═══ PROXY FETCH — uses custom headers, works with new api/shopify.js ═══ */
 async function proxyFetch(shopifyPath, method, body) {
-  const base = proxyUrl();
-  if (!base) throw new Error('No proxy URL set. Enter your Vercel proxy URL in the connection panel.');
-
-  const opts = {
-    method: 'POST',   // always POST to proxy — method is passed via header
-    headers: {
-      'Content-Type': 'application/json',
-      'x-shopify-path':   shopifyPath,
-      'x-shopify-method': method || 'GET',
-    },
+  var base = getProxyUrl();
+  if (!base) throw new Error('No proxy URL entered.');
+  var m = (method || 'GET').toUpperCase();
+  var url = base + '?p=' + encodeURIComponent(shopifyPath) + '&m=' + m;
+  var opts = {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: body ? JSON.stringify(body) : '{}'
   };
-  if (body) opts.body = JSON.stringify(body);
-
-  const res = await fetch(base, opts);
-  const text = await res.text();
-
-  let data;
-  try { data = JSON.parse(text); }
-  catch(e) { throw new Error(`Non-JSON response (status ${res.status}): ${text.slice(0, 200)}`); }
-
+  var res = await fetch(url, opts);
+  var text = await res.text();
+  var data;
+  try { data = JSON.parse(text); } catch(e) { throw new Error('Bad response (' + res.status + '): ' + text.slice(0,200)); }
   if (!res.ok) {
-    const msg = data?.error || data?.errors || JSON.stringify(data);
-    throw new Error(`${res.status}: ${msg}`);
+    var msg = data.error || data.errors || JSON.stringify(data);
+    throw new Error(res.status + ': ' + msg);
   }
   return data;
 }
 
-/* ═══ CONNECTION TEST ═══ */
 function resetConn() {
   document.getElementById('connDot').className = 'status-dot';
   document.getElementById('connLabel').textContent = 'Not connected';
 }
 
 async function testConnection() {
-  const url = proxyUrl();
-  if (!url) { alert('Enter your Vercel proxy URL first.\n\nExample: https://your-project.vercel.app/api/shopify'); return; }
-
+  var url = getProxyUrl();
+  if (!url) { alert('Enter your Vercel proxy URL first.\n\nExample: https://shopify-tag-updater.vercel.app/api/shopify'); return; }
   clearDiag();
-  document.getElementById('testBtn').textContent = 'Testing…';
-  document.getElementById('connLabel').textContent = 'Testing…';
-
-  diag('→ Proxy URL: ' + url);
-  diag('→ Sending test request to Shopify (shop.json)…');
-
+  document.getElementById('testBtn').textContent = 'Testing...';
+  document.getElementById('connLabel').textContent = 'Testing...';
+  diag('Proxy URL: ' + url);
   try {
-    const data = await proxyFetch('shop.json', 'GET');
-    const shopName = data?.shop?.name || 'Unknown shop';
-    const shopDomain = data?.shop?.domain || '';
-    diag('✓ Connected! Store: ' + shopName + ' (' + shopDomain + ')', '#6ec97a');
+    diag('Step 1 - Checking env vars...');
+    var debugRes = await fetch(url + '?debug=1');
+    var debugData = await debugRes.json();
+    var storeOk = debugData.SHOPIFY_STORE && debugData.SHOPIFY_STORE !== 'MISSING';
+    var tokenOk = debugData.SHOPIFY_TOKEN && debugData.SHOPIFY_TOKEN !== 'MISSING';
+    diag('SHOPIFY_STORE: ' + (debugData.SHOPIFY_STORE || 'MISSING'), storeOk ? '#6ec97a' : '#e8816a');
+    diag('SHOPIFY_TOKEN: ' + (debugData.SHOPIFY_TOKEN || 'MISSING'), tokenOk ? '#6ec97a' : '#e8816a');
+    if (!storeOk || !tokenOk) {
+      throw new Error('Env vars missing in Vercel. Go to Vercel -> Settings -> Environment Variables and add SHOPIFY_STORE and SHOPIFY_TOKEN, then Redeploy.');
+    }
+    diag('Step 2 - Connecting to Shopify...');
+    var data = await proxyFetch('shop.json', 'GET');
+    var name = (data.shop && data.shop.name) ? data.shop.name : 'Unknown';
+    diag('Connected! Store: ' + name, '#6ec97a');
     document.getElementById('connDot').className = 'status-dot connected';
-    document.getElementById('connLabel').textContent = shopName;
+    document.getElementById('connLabel').textContent = name;
   } catch(e) {
-    diag('✗ Failed: ' + e.message, '#e8816a');
+    diag('FAILED: ' + e.message, '#e8816a');
     diag('');
-    diag('Common causes:', '#6aaee8');
-    diag('  • SHOPIFY_STORE or SHOPIFY_TOKEN not set in Vercel env vars', '#e8c86a');
-    diag('  • Vercel project not yet redeployed after adding env vars', '#e8c86a');
-    diag('  • Wrong proxy URL (should end in /api/shopify)', '#e8c86a');
-    diag('  • API token missing read_products scope', '#e8c86a');
+    diag('Check:', '#6aaee8');
+    diag('  1. Env vars set in Vercel (SHOPIFY_STORE + SHOPIFY_TOKEN)', '#e8c86a');
+    diag('  2. Vercel redeployed after adding env vars', '#e8c86a');
+    diag('  3. api/shopify.js is the v4 version (starts with module.exports)', '#e8c86a');
     document.getElementById('connDot').className = 'status-dot';
-    document.getElementById('connLabel').textContent = 'Failed — see diagnostics';
+    document.getElementById('connLabel').textContent = 'Failed';
   }
-
   document.getElementById('testBtn').textContent = 'Test connection';
 }
 
-/* ═══ FIELD TOGGLES ═══ */
 function toggleField(f) {
   fieldToggles[f] = !fieldToggles[f];
-  const card = document.getElementById('tog-' + f);
+  var card = document.getElementById('tog-' + f);
   card.classList.toggle('active', fieldToggles[f]);
-  card.querySelector('.toggle-box').textContent = fieldToggles[f] ? '✓' : '';
+  card.querySelector('.toggle-box').textContent = fieldToggles[f] ? '\u2713' : '';
   if (f === 'price') document.getElementById('wrap-price').style.opacity = fieldToggles.price ? '1' : '.35';
   if (f === 'cost')  document.getElementById('wrap-cost').style.opacity  = fieldToggles.cost  ? '1' : '.35';
   if (f === 'meta')  document.getElementById('section-meta').style.opacity = fieldToggles.meta ? '1' : '.35';
 }
+
 function toggleMeta(m) {
   metaToggles[m] = !metaToggles[m];
-  const el = document.getElementById('me-' + m);
+  var el = document.getElementById('me-' + m);
   el.classList.toggle('on', metaToggles[m]);
-  el.querySelector('.meta-check').textContent = metaToggles[m] ? '✓' : '';
-  const op = metaToggles[m] ? '1' : '.35';
+  el.querySelector('.meta-check').textContent = metaToggles[m] ? '\u2713' : '';
+  var op = metaToggles[m] ? '1' : '.35';
   document.getElementById('mwrap-' + m + '-val').style.opacity = op;
   document.getElementById('mwrap-' + m + '-type').style.opacity = op;
 }
 
-/* ═══ CUSTOM META ═══ */
 function addCustomMeta() {
   extraMetaCount++;
-  const id = 'extra-' + extraMetaCount;
-  const div = document.createElement('div');
+  var id = 'extra-' + extraMetaCount;
+  var div = document.createElement('div');
   div.id = id;
   div.style.cssText = 'border:1.5px solid var(--rule);border-radius:2px;padding:.85rem 1rem;margin-top:.5rem;display:grid;grid-template-columns:150px 130px 1fr 1fr auto;gap:.75rem;align-items:end;';
-  div.innerHTML = `
-    <div class="field"><label>Namespace</label><input type="text" placeholder="custom" value="custom" id="${id}-ns"/></div>
-    <div class="field"><label>Key</label><input type="text" placeholder="my_field" id="${id}-key"/></div>
-    <div class="field"><label>Value</label><input type="text" placeholder="value" id="${id}-val"/></div>
-    <div class="field"><label>Type</label><select id="${id}-type"><option value="single_line_text_field">text</option><option value="number_decimal">number</option><option value="boolean">boolean</option></select></div>
-    <button class="btn-sm" onclick="document.getElementById('${id}').remove()" style="margin-bottom:0;">✕</button>
-  `;
+  div.innerHTML = '<div class="field"><label>Namespace</label><input type="text" placeholder="custom" value="custom" id="' + id + '-ns"/></div>' +
+    '<div class="field"><label>Key</label><input type="text" placeholder="my_field" id="' + id + '-key"/></div>' +
+    '<div class="field"><label>Value</label><input type="text" placeholder="value" id="' + id + '-val"/></div>' +
+    '<div class="field"><label>Type</label><select id="' + id + '-type"><option value="single_line_text_field">text</option><option value="number_decimal">number</option></select></div>' +
+    '<button class="btn-sm" onclick="document.getElementById(\'' + id + '\').remove()">X</button>';
   document.getElementById('extra-meta-container').appendChild(div);
 }
 
-/* ═══ LOGGING ═══ */
 function log(msg, type) {
-  const area = document.getElementById('logArea');
-  const t = new Date().toLocaleTimeString('en-CA', {hour12:false});
-  const cls = {info:'log-info', ok:'log-ok', err:'log-err', warn:'log-warn'}[type] || 'log-info';
-  const line = document.createElement('div');
+  var area = document.getElementById('logArea');
+  var t = new Date().toLocaleTimeString('en-CA', {hour12:false});
+  var cls = {info:'log-info', ok:'log-ok', err:'log-err', warn:'log-warn'}[type] || 'log-info';
+  var line = document.createElement('div');
   line.className = 'log-line';
-  line.innerHTML = `<span class="log-time">${t}</span><span class="${cls}">${msg}</span>`;
+  line.innerHTML = '<span class="log-time">' + t + '</span><span class="' + cls + '">' + msg + '</span>';
   area.appendChild(line);
   area.scrollTop = area.scrollHeight;
 }
+
 function setProgress(pct, text) {
   document.getElementById('progFill').style.width = pct + '%';
   document.getElementById('progPct').textContent = Math.round(pct) + '%';
   document.getElementById('progText').textContent = text;
 }
 
-/* ═══ EXACT TAG MATCH ═══ */
 function hasExactTag(product, tag) {
-  return (product.tags || '')
-    .split(',')
-    .map(t => t.trim().toLowerCase())
-    .includes(tag.trim().toLowerCase());
+  return (product.tags || '').split(',').map(function(t){ return t.trim().toLowerCase(); }).indexOf(tag.trim().toLowerCase()) !== -1;
 }
 
-/* ═══ COLLECT FIELDS ═══ */
 function collectFields() {
-  const newPrice = document.getElementById('newPrice').value;
-  const newCost  = document.getElementById('newCost').value;
-  const metaFields = [];
+  var newPrice = document.getElementById('newPrice').value;
+  var newCost  = document.getElementById('newCost').value;
+  var metaFields = [];
   if (fieldToggles.meta) {
     if (metaToggles.federal && document.getElementById('meta-federal-val').value !== '') {
-      metaFields.push({ namespace:'custom', key:'__Federal_Excise',   value: document.getElementById('meta-federal-val').value,   type: document.getElementById('meta-federal-type').value });
+      metaFields.push({ namespace:'custom', key:'__Federal_Excise', value: document.getElementById('meta-federal-val').value, type: document.getElementById('meta-federal-type').value });
     }
     if (metaToggles.provincial && document.getElementById('meta-provincial-val').value !== '') {
       metaFields.push({ namespace:'custom', key:'__Provincial_Excise', value: document.getElementById('meta-provincial-val').value, type: document.getElementById('meta-provincial-type').value });
     }
-    for (let i = 1; i <= extraMetaCount; i++) {
-      const el = document.getElementById('extra-' + i);
+    for (var i = 1; i <= extraMetaCount; i++) {
+      var el = document.getElementById('extra-' + i);
       if (!el) continue;
-      const ns  = el.querySelector('[id$="-ns"]').value.trim();
-      const key = el.querySelector('[id$="-key"]').value.trim();
-      const val = el.querySelector('[id$="-val"]').value.trim();
-      const typ = el.querySelector('[id$="-type"]').value;
-      if (ns && key && val) metaFields.push({ namespace: ns, key, value: val, type: typ });
+      var ns  = el.querySelector('[id$="-ns"]').value.trim();
+      var key = el.querySelector('[id$="-key"]').value.trim();
+      var val = el.querySelector('[id$="-val"]').value.trim();
+      var typ = el.querySelector('[id$="-type"]').value;
+      if (ns && key && val) metaFields.push({ namespace: ns, key: key, value: val, type: typ });
     }
   }
-  return { newPrice, newCost, metaFields };
+  return { newPrice: newPrice, newCost: newCost, metaFields: metaFields };
 }
 
-/* ═══ MAIN SYNC ═══ */
 async function runSync() {
   if (running) return;
-
-  const tag      = document.getElementById('productTag').value.trim();
-  const dryRun   = document.getElementById('dryRun').value === 'yes';
-  const rateMs   = parseInt(document.getElementById('rateLimit').value);
-  const stopOnErr= document.getElementById('onError').value === 'stop';
-
-  if (!tag)        { alert('Enter a product tag to search.'); return; }
-  if (!proxyUrl()) { alert('Enter your Vercel proxy URL in the connection panel.'); return; }
-
-  const { newPrice, newCost, metaFields } = collectFields();
-
-  running = true;
-  cancelFlag = false;
-  resultRows = [];
+  var tag      = document.getElementById('productTag').value.trim();
+  var dryRun   = document.getElementById('dryRun').value === 'yes';
+  var rateMs   = parseInt(document.getElementById('rateLimit').value);
+  var stopOnErr= document.getElementById('onError').value === 'stop';
+  if (!tag)           { alert('Enter a product tag.'); return; }
+  if (!getProxyUrl()) { alert('Enter your Vercel proxy URL.'); return; }
+  var fields = collectFields();
+  var newPrice = fields.newPrice, newCost = fields.newCost, metaFields = fields.metaFields;
+  running = true; cancelFlag = false; resultRows = [];
   document.getElementById('runBtn').disabled = true;
-  document.getElementById('runLabel').textContent = 'Fetching products…';
+  document.getElementById('runLabel').textContent = 'Fetching...';
   document.getElementById('logArea').innerHTML = '';
   document.getElementById('progressCard').classList.add('visible');
   document.getElementById('resultsCard').classList.remove('visible');
-  setProgress(5, 'Fetching products from Shopify…');
-
-  let stats = { total:0, ok:0, skip:0, err:0 };
-
+  setProgress(5, 'Fetching products...');
+  var stats = { total:0, ok:0, skip:0, err:0 };
   try {
-    log(`Searching for products with tag "${tag}"…`, 'info');
-
-    // Fetch all pages
-    let allFetched = [];
-    let pageInfo = null;
-    do {
-      const qs = pageInfo
-        ? `limit=250&page_info=${pageInfo}`
-        : `limit=250&tag=${encodeURIComponent(tag)}`;
-      const data = await proxyFetch(`products.json?${qs}`, 'GET');
-      allFetched = allFetched.concat(data.products || []);
-      pageInfo = null;
-      if ((data.products || []).length < 250) break;
-    } while (pageInfo && !cancelFlag);
-
-    log(`Shopify returned ${allFetched.length} product(s) — applying exact tag filter…`, 'info');
-
-    // Exact match filter
-    const products = allFetched.filter(p => hasExactTag(p, tag));
-    const filtered = allFetched.length - products.length;
-    if (filtered > 0) log(`⚠ Removed ${filtered} partial-match product(s) — exact tag only`, 'warn');
-
+    log('Searching for tag "' + tag + '"...', 'info');
+    var allFetched = [];
+    var data = await proxyFetch('products.json?limit=250&tag=' + encodeURIComponent(tag), 'GET');
+    allFetched = data.products || [];
+    log('Shopify returned ' + allFetched.length + ' product(s) - applying exact filter...', 'info');
+    var products = allFetched.filter(function(p){ return hasExactTag(p, tag); });
+    var filtered = allFetched.length - products.length;
+    if (filtered > 0) log('Removed ' + filtered + ' partial-match product(s)', 'warn');
     if (!products.length) {
-      log(`No products with exact tag "${tag}"`, 'warn');
-      setProgress(100, 'No exact matches found');
-      syncDone(stats);
-      return;
+      log('No products with exact tag "' + tag + '"', 'warn');
+      setProgress(100, 'No matches found');
+      syncDone(stats); return;
     }
-
-    log(`✓ ${products.length} product(s) confirmed with exact tag "${tag}"`, 'ok');
-
-    // Confirm before writing
+    log(products.length + ' product(s) confirmed with exact tag "' + tag + '"', 'ok');
     if (!dryRun) {
-      const fieldLines = [];
-      if (fieldToggles.price && newPrice !== '') fieldLines.push(`Price → $${newPrice}`);
-      if (fieldToggles.cost  && newCost  !== '') fieldLines.push(`Cost  → $${newCost}`);
-      metaFields.forEach(m => fieldLines.push(`Meta  → ${m.namespace}.${m.key} = ${m.value}`));
-      const ok = confirm(
-        `CONFIRM UPDATE
-
-Tag: "${tag}"
-Products to update: ${products.length}
-
-Changes:
-` +
-        fieldLines.map(f => '  • ' + f).join('
-') +
-        `
-
-This writes to your LIVE Shopify store. Continue?`
-      );
-      if (!ok) { log('Cancelled by user.', 'warn'); syncDone(stats); return; }
+      var fieldLines = [];
+      if (fieldToggles.price && newPrice !== '') fieldLines.push('Price: $' + newPrice);
+      if (fieldToggles.cost  && newCost  !== '') fieldLines.push('Cost: $' + newCost);
+      metaFields.forEach(function(m){ fieldLines.push(m.namespace + '.' + m.key + ' = ' + m.value); });
+      var msg = 'CONFIRM UPDATE\n\nTag: "' + tag + '"\nProducts: ' + products.length + '\n\nChanges:\n' + fieldLines.map(function(f){ return '  - ' + f; }).join('\n') + '\n\nWrite to live Shopify store?';
+      if (!confirm(msg)) { log('Cancelled.', 'warn'); syncDone(stats); return; }
     }
-
-    setProgress(10, `Processing ${products.length} product(s)…`);
+    setProgress(10, 'Processing ' + products.length + ' product(s)...');
     stats.total = products.length;
-
-    for (let i = 0; i < products.length; i++) {
+    for (var i = 0; i < products.length; i++) {
       if (cancelFlag) { log('Cancelled.', 'warn'); break; }
-
-      const product = products[i];
-      const pct = 10 + ((i / products.length) * 88);
-      setProgress(pct, `${i+1}/${products.length}: ${product.title.slice(0,50)}`);
-      log(`Processing: ${product.title} (#${product.id})`, 'info');
-
-      const fieldsUpdated = [];
-      let errMsg = '';
-
+      var product = products[i];
+      var pct = 10 + ((i / products.length) * 88);
+      setProgress(pct, (i+1) + '/' + products.length + ': ' + product.title.slice(0,50));
+      log('Processing: ' + product.title + ' (#' + product.id + ')', 'info');
+      var fieldsUpdated = [];
+      var errMsg = '';
       try {
-        // Price
         if (fieldToggles.price && newPrice !== '') {
-          for (const v of (product.variants || [])) {
+          for (var vi = 0; vi < (product.variants || []).length; vi++) {
+            var v = product.variants[vi];
             await sleep(rateMs);
-            if (!dryRun) await proxyFetch(`variants/${v.id}.json`, 'PUT', { variant: { id: v.id, price: newPrice } });
+            if (!dryRun) await proxyFetch('variants/' + v.id + '.json', 'PUT', { variant: { id: v.id, price: newPrice } });
           }
           fieldsUpdated.push('price');
-          log(`  ✓ Price → $${newPrice}${dryRun?' [DRY]':''}`, 'ok');
+          log('  Price -> $' + newPrice + (dryRun?' [DRY]':''), 'ok');
         }
-
-        // Cost
         if (fieldToggles.cost && newCost !== '') {
-          for (const v of (product.variants || [])) {
+          for (var vi2 = 0; vi2 < (product.variants || []).length; vi2++) {
+            var v2 = product.variants[vi2];
             await sleep(rateMs);
-            if (!dryRun) await proxyFetch(`inventory_items/${v.inventory_item_id}.json`, 'PUT', { inventory_item: { id: v.inventory_item_id, cost: newCost } });
+            if (!dryRun) await proxyFetch('inventory_items/' + v2.inventory_item_id + '.json', 'PUT', { inventory_item: { id: v2.inventory_item_id, cost: newCost } });
           }
           fieldsUpdated.push('cost');
-          log(`  ✓ Cost → $${newCost}${dryRun?' [DRY]':''}`, 'ok');
+          log('  Cost -> $' + newCost + (dryRun?' [DRY]':''), 'ok');
         }
-
-        // Metafields
         if (metaFields.length) {
-          for (const mf of metaFields) {
+          for (var mi = 0; mi < metaFields.length; mi++) {
+            var mf = metaFields[mi];
             await sleep(rateMs);
-            if (!dryRun) await proxyFetch(`products/${product.id}/metafields.json`, 'POST', { metafield: mf });
-            log(`  ✓ ${mf.namespace}.${mf.key} → ${mf.value}${dryRun?' [DRY]':''}`, 'ok');
+            if (!dryRun) await proxyFetch('products/' + product.id + '/metafields.json', 'POST', { metafield: mf });
+            log('  ' + mf.namespace + '.' + mf.key + ' -> ' + mf.value + (dryRun?' [DRY]':''), 'ok');
           }
           fieldsUpdated.push('meta');
         }
-
         if (fieldsUpdated.length === 0) {
           stats.skip++;
-          resultRows.push({ title:product.title, id:product.id, tag, allTags:product.tags, fields:[], status:'skip', err:'' });
+          resultRows.push({ title:product.title, id:product.id, tag:tag, allTags:product.tags, fields:[], status:'skip', err:'' });
         } else {
           stats.ok++;
-          resultRows.push({ title:product.title, id:product.id, tag, allTags:product.tags, fields:fieldsUpdated, status:'ok', err:'' });
+          resultRows.push({ title:product.title, id:product.id, tag:tag, allTags:product.tags, fields:fieldsUpdated, status:'ok', err:'' });
         }
-
       } catch(e) {
         errMsg = e.message;
         stats.err++;
-        resultRows.push({ title:product.title, id:product.id, tag, allTags:product.tags, fields:fieldsUpdated, status:'err', err:errMsg });
-        log(`  ✗ ${errMsg}`, 'err');
-        if (stopOnErr) { log('Stopping on error.', 'warn'); break; }
+        resultRows.push({ title:product.title, id:product.id, tag:tag, allTags:product.tags, fields:fieldsUpdated, status:'err', err:errMsg });
+        log('  ERROR: ' + errMsg, 'err');
+        if (stopOnErr) { log('Stopping.', 'warn'); break; }
       }
-
       updateResultStats(stats);
       renderResults();
     }
-
-    setProgress(100, `Done — ${stats.ok} updated, ${stats.err} errors`);
-    log(`Sync complete. Updated:${stats.ok} Skipped:${stats.skip} Errors:${stats.err}`, 'ok');
-
+    setProgress(100, 'Done - ' + stats.ok + ' updated, ' + stats.err + ' errors');
+    log('Complete. Updated:' + stats.ok + ' Skipped:' + stats.skip + ' Errors:' + stats.err, 'ok');
   } catch(e) {
-    log(`Fatal: ${e.message}`, 'err');
-    setProgress(100, 'Failed — see log');
+    log('Fatal: ' + e.message, 'err');
+    setProgress(100, 'Failed - see log');
   }
-
   syncDone(stats);
 }
 
@@ -1050,7 +982,6 @@ function syncDone(stats) {
 }
 function cancelSync() { cancelFlag = true; }
 
-/* ═══ RESULTS ═══ */
 function updateResultStats(s) {
   document.getElementById('rs-total').textContent = s.total;
   document.getElementById('rs-ok').textContent    = s.ok;
@@ -1059,37 +990,28 @@ function updateResultStats(s) {
 }
 
 function renderResults() {
-  const tbody = document.getElementById('resultsBody');
-  const fLabel = { price:'Variant Price', cost:'Cost/Item', meta:'Metafields' };
-  const fClass = { price:'ch-price', cost:'ch-cost', meta:'ch-meta' };
-  tbody.innerHTML = resultRows.map(r => {
-    const pills = r.fields.map(f => `<span class="change-pill ${fClass[f]}">${fLabel[f]}</span>`).join('');
-    const badge = r.status==='ok' ? '<span class="badge badge-ok">Updated</span>'
-                : r.status==='err' ? '<span class="badge badge-err">Error</span>'
-                : '<span class="badge badge-skip">Skipped</span>';
-    const errLine = r.err ? `<div class="error-msg">${r.err.slice(0,120)}</div>` : '';
-    const tagPills = (r.allTags||'').split(',').map(t => {
-      const tr = t.trim();
-      const match = tr.toLowerCase() === r.tag.toLowerCase();
-      return `<span style="font-family:var(--mono);font-size:.65rem;padding:.1rem .35rem;border-radius:2px;margin:.1rem;display:inline-block;${match?'background:rgba(26,107,200,.15);color:var(--accent2);font-weight:500;border:1px solid rgba(26,107,200,.3);':'color:var(--muted);'}">${tr}</span>`;
+  var tbody = document.getElementById('resultsBody');
+  var fLabel = { price:'Variant Price', cost:'Cost/Item', meta:'Metafields' };
+  var fClass = { price:'ch-price', cost:'ch-cost', meta:'ch-meta' };
+  tbody.innerHTML = resultRows.map(function(r) {
+    var pills = r.fields.map(function(f){ return '<span class="change-pill ' + fClass[f] + '">' + fLabel[f] + '</span>'; }).join('');
+    var badge = r.status==='ok' ? '<span class="badge badge-ok">Updated</span>' : r.status==='err' ? '<span class="badge badge-err">Error</span>' : '<span class="badge badge-skip">Skipped</span>';
+    var errLine = r.err ? '<div class="error-msg">' + r.err.slice(0,120) + '</div>' : '';
+    var tagPills = (r.allTags||'').split(',').map(function(t){
+      var tr = t.trim();
+      var match = tr.toLowerCase() === r.tag.toLowerCase();
+      return '<span style="font-family:var(--mono);font-size:.65rem;padding:.1rem .35rem;border-radius:2px;margin:.1rem;display:inline-block;' + (match ? 'background:rgba(26,107,200,.15);color:var(--accent2);font-weight:500;border:1px solid rgba(26,107,200,.3);' : 'color:var(--muted);') + '">' + tr + '</span>';
     }).join('');
-    return `<tr>
-      <td><div class="prod-title">${r.title}</div><div class="prod-id">#${r.id}</div></td>
-      <td><div style="line-height:1.8">${tagPills}</div></td>
-      <td>${pills||'<span style="color:var(--muted);font-size:.72rem;">—</span>'}</td>
-      <td>${badge}${errLine}</td>
-    </tr>`;
+    return '<tr><td><div class="prod-title">' + r.title + '</div><div class="prod-id">#' + r.id + '</div></td><td><div style="line-height:1.8">' + tagPills + '</div></td><td>' + (pills||'<span style="color:var(--muted);font-size:.72rem;">-</span>') + '</td><td>' + badge + errLine + '</td></tr>';
   }).join('');
 }
 
-/* ═══ EXPORT CSV ═══ */
 function exportResults() {
   if (!resultRows.length) return;
-  const rows = [['Product','ID','Tag','Fields Updated','Status','Error']];
-  resultRows.forEach(r => rows.push([`"${r.title.replace(/"/g,'""')}"`, r.id, r.tag, r.fields.join('; '), r.status, r.err]));
-  const csv = rows.map(r => r.join(',')).join('
-');
-  const a = document.createElement('a');
+  var rows = [['Product','ID','Tag','Fields Updated','Status','Error']];
+  resultRows.forEach(function(r){ rows.push(['"' + r.title.replace(/"/g,'""') + '"', r.id, r.tag, r.fields.join('; '), r.status, r.err]); });
+  var csv = rows.map(function(r){ return r.join(','); }).join('\n');
+  var a = document.createElement('a');
   a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
   a.download = 'shopify-sync-results.csv';
   a.click();

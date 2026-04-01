@@ -495,8 +495,13 @@ input::placeholder { color: var(--muted); font-weight: 400; }
           <input type="text" class="tag-input-big" id="productTag" placeholder="e.g. summer-sale, clearance, vip-only…"/>
         </div>
       </div>
-      <div style="font-size:.78rem;color:var(--muted)">
-        All Shopify products carrying this exact tag will be updated. Tags are case-sensitive.
+      <div style="font-size:.78rem;color:var(--muted);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:.5rem;">
+        <span>All products with this exact tag will be updated. Tags are case-sensitive.</span>
+        <button class="btn-sm" onclick="browseTags()" id="browseBtn">Browse all tags</button>
+      </div>
+      <div id="tagBrowseBox" style="display:none;background:var(--paper2);border:1.5px solid var(--rule);border-radius:2px;padding:1rem;max-height:200px;overflow-y:auto;">
+        <div style="font-family:var(--mono);font-size:.68rem;color:var(--muted);margin-bottom:.5rem;">Click a tag to use it:</div>
+        <div id="tagBrowseList" style="display:flex;flex-wrap:wrap;gap:.35rem;"></div>
       </div>
     </div>
   </div>
@@ -746,6 +751,44 @@ async function proxyFetch(shopifyPath, method, body) {
   return data;
 }
 
+async function browseTags() {
+  if (!getProxyUrl()) { alert('Enter your proxy URL and test connection first.'); return; }
+  var btn = document.getElementById('browseBtn');
+  var box = document.getElementById('tagBrowseBox');
+  var list = document.getElementById('tagBrowseList');
+  btn.textContent = 'Loading...';
+  list.innerHTML = '';
+  try {
+    // Fetch first 250 products to get tag list
+    var data = await proxyFetch('products.json?limit=250', 'GET');
+    var products = data.products || [];
+    var tagMap = {};
+    products.forEach(function(p) {
+      (p.tags || '').split(',').forEach(function(t) {
+        var tr = t.trim();
+        if (tr) tagMap[tr] = (tagMap[tr] || 0) + 1;
+      });
+    });
+    var tags = Object.keys(tagMap).sort();
+    if (!tags.length) {
+      list.innerHTML = '<span style="font-family:var(--mono);font-size:.72rem;color:var(--muted);">No tags found</span>';
+    } else {
+      list.innerHTML = tags.map(function(t) {
+        return '<span onclick="selectTag('' + t.replace(/'/g,"\'") + '')" style="cursor:pointer;font-family:var(--mono);font-size:.72rem;padding:.2rem .55rem;border-radius:2px;border:1px solid var(--rule);background:var(--paper);display:inline-block;" title="' + tagMap[t] + ' product(s)">' + t + ' <span style="color:var(--muted);">(' + tagMap[t] + ')</span></span>';
+      }).join('');
+    }
+    box.style.display = 'block';
+  } catch(e) {
+    alert('Could not load tags: ' + e.message);
+  }
+  btn.textContent = 'Browse all tags';
+}
+
+function selectTag(tag) {
+  document.getElementById('productTag').value = tag;
+  document.getElementById('tagBrowseBox').style.display = 'none';
+}
+
 function resetConn() {
   document.getElementById('connDot').className = 'status-dot';
   document.getElementById('connLabel').textContent = 'Not connected';
@@ -887,13 +930,42 @@ async function runSync() {
   var stats = { total:0, ok:0, skip:0, err:0 };
   try {
     log('Searching for tag "' + tag + '"...', 'info');
+    // Fetch ALL pages (Shopify paginates at 250 per page)
     var allFetched = [];
-    var data = await proxyFetch('products.json?limit=250&tag=' + encodeURIComponent(tag), 'GET');
-    allFetched = data.products || [];
-    log('Shopify returned ' + allFetched.length + ' product(s) - applying exact filter...', 'info');
+    var nextPath = 'products.json?limit=250&tag=' + encodeURIComponent(tag);
+    var pageNum = 0;
+    while (nextPath) {
+      pageNum++;
+      log('Fetching page ' + pageNum + '...', 'info');
+      var pageData = await proxyFetch(nextPath, 'GET');
+      var pageProducts = pageData.products || [];
+      allFetched = allFetched.concat(pageProducts);
+      // Stop if less than 250 returned (last page)
+      if (pageProducts.length < 250) {
+        nextPath = null;
+      } else {
+        // Use since_id cursor for next page
+        var lastId = pageProducts[pageProducts.length - 1].id;
+        nextPath = 'products.json?limit=250&tag=' + encodeURIComponent(tag) + '&since_id=' + lastId;
+      }
+    }
+    log('Shopify returned ' + allFetched.length + ' total product(s) across ' + pageNum + ' page(s)', 'info');
+
+    // Show all unique tags found — helps user spot the right tag name
+    var allTagsFound = {};
+    allFetched.forEach(function(p) {
+      (p.tags || '').split(',').forEach(function(t) {
+        var tr = t.trim();
+        if (tr) allTagsFound[tr] = true;
+      });
+    });
+    var tagList = Object.keys(allTagsFound).sort();
+    log('All tags found in results: ' + tagList.join(', '), 'info');
+
+    // Exact match filter
     var products = allFetched.filter(function(p){ return hasExactTag(p, tag); });
     var filtered = allFetched.length - products.length;
-    if (filtered > 0) log('Removed ' + filtered + ' partial-match product(s)', 'warn');
+    if (filtered > 0) log('Removed ' + filtered + ' partial-match product(s) - exact tag only', 'warn');
     if (!products.length) {
       log('No products with exact tag "' + tag + '"', 'warn');
       setProgress(100, 'No matches found');
